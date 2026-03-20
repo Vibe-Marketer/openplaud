@@ -1,8 +1,11 @@
 import type {
     PlaudApiError,
+    PlaudDetailResponse,
     PlaudDeviceListResponse,
+    PlaudOutlineItem,
     PlaudRecordingsResponse,
     PlaudTempUrlResponse,
+    PlaudTranscriptSegment,
 } from "@/types/plaud";
 import { DEFAULT_SERVER_KEY, PLAUD_SERVERS } from "./servers";
 
@@ -214,6 +217,80 @@ export class PlaudClient {
             method: "PATCH",
             body: JSON.stringify({ filename }),
         });
+    }
+
+    /**
+     * Get detailed recording info including content links
+     */
+    async getRecordingDetail(fileId: string): Promise<PlaudDetailResponse> {
+        return this.request<PlaudDetailResponse>(`/file/detail/${fileId}`);
+    }
+
+    /**
+     * Fetch and decompress gzipped content from a signed S3 URL
+     */
+    async fetchGzippedContent(url: string): Promise<string> {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(
+                `Failed to fetch content: ${response.statusText}`,
+            );
+        }
+        const buffer = Buffer.from(await response.arrayBuffer());
+        try {
+            const { gunzipSync } = await import("node:zlib");
+            return gunzipSync(buffer).toString("utf-8");
+        } catch {
+            return buffer.toString("utf-8");
+        }
+    }
+
+    /**
+     * Get transcript, summary, and outline for a recording
+     * Returns null for any content type that isn't available
+     */
+    async getRecordingContent(fileId: string): Promise<{
+        transcript: PlaudTranscriptSegment[] | null;
+        summary: string | null;
+        outline: PlaudOutlineItem[] | null;
+    }> {
+        const detail = await this.getRecordingDetail(fileId);
+        const result: {
+            transcript: PlaudTranscriptSegment[] | null;
+            summary: string | null;
+            outline: PlaudOutlineItem[] | null;
+        } = { transcript: null, summary: null, outline: null };
+
+        for (const item of detail.data.content_list) {
+            if (item.task_status !== 1 || !item.data_link) continue;
+
+            try {
+                const content = await this.fetchGzippedContent(item.data_link);
+
+                switch (item.data_type) {
+                    case "transaction":
+                        result.transcript = JSON.parse(
+                            content,
+                        ) as PlaudTranscriptSegment[];
+                        break;
+                    case "auto_sum_note":
+                        result.summary = content;
+                        break;
+                    case "outline":
+                        result.outline = JSON.parse(
+                            content,
+                        ) as PlaudOutlineItem[];
+                        break;
+                }
+            } catch (error) {
+                console.error(
+                    `Failed to fetch ${item.data_type} for ${fileId}:`,
+                    error,
+                );
+            }
+        }
+
+        return result;
     }
 }
 

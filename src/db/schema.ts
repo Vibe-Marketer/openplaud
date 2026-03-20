@@ -141,6 +141,9 @@ export const recordings = pgTable(
         zonemins: integer("zonemins"),
         scene: integer("scene"),
         isTrash: boolean("is_trash").notNull().default(false),
+        // Plaud AI content availability flags
+        hasPlaudTranscript: boolean("has_plaud_transcript").notNull().default(false),
+        hasPlaudSummary: boolean("has_plaud_summary").notNull().default(false),
         createdAt: timestamp("created_at").notNull().defaultNow(),
         updatedAt: timestamp("updated_at").notNull().defaultNow(),
     },
@@ -179,6 +182,9 @@ export const transcriptions = pgTable(
             .default("server"), // 'server' or 'browser'
         provider: varchar("provider", { length: 100 }).notNull(), // e.g., 'openai', 'groq', 'browser'
         model: varchar("model", { length: 100 }).notNull(), // e.g., 'whisper-1', 'whisper-large-v3-turbo', 'whisper-base'
+        // Plaud-specific fields
+        plaudSegments: jsonb("plaud_segments"), // Raw Plaud transcript segments array (timestamps, speakers)
+        source: varchar("source", { length: 20 }).notNull().default("user"), // 'plaud' or 'user'
         createdAt: timestamp("created_at").notNull().defaultNow(),
     },
     (table) => ({
@@ -207,6 +213,9 @@ export const aiEnhancements = pgTable("ai_enhancements", {
     keyPoints: jsonb("key_points"), // Array of key points
     provider: varchar("provider", { length: 100 }).notNull(), // e.g., 'openai', 'anthropic-via-openrouter'
     model: varchar("model", { length: 100 }).notNull(), // e.g., 'gpt-4o', 'claude-3.5-sonnet'
+    // Plaud-specific fields
+    plaudOutline: jsonb("plaud_outline"), // Outline/topic markers from Plaud
+    source: varchar("source", { length: 20 }).notNull().default("user"), // 'plaud' or 'user'
     createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

@@ -43,6 +43,12 @@ export async function transcribeRecording(
             .where(eq(transcriptions.recordingId, recordingId))
             .limit(1);
 
+        // If a Plaud-sourced transcription exists, never re-transcribe — Plaud's
+        // transcript includes speaker diarization and timestamps we can't reproduce
+        if (existingTranscription?.source === "plaud" && existingTranscription.text) {
+            return { success: true };
+        }
+
         if (existingTranscription?.text) {
             return { success: true };
         }

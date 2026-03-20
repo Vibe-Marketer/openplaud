@@ -1,6 +1,13 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { plaudConnections, recordings, userSettings, users } from "@/db/schema";
+import {
+    aiEnhancements,
+    plaudConnections,
+    recordings,
+    transcriptions,
+    userSettings,
+    users,
+} from "@/db/schema";
 import { env } from "@/lib/env";
 import { sendNewRecordingBarkNotification } from "@/lib/notifications/bark";
 import { sendNewRecordingEmail } from "@/lib/notifications/email";
@@ -39,6 +46,84 @@ interface SyncContext {
 }
 
 /**
+ * Fetch and store Plaud AI content (transcript, summary, outline) for a recording.
+ * For existing recordings, skips content types that have already been pulled from Plaud.
+ */
+async function fetchPlaudAIContent(
+    plaudRecording: PlaudRecording,
+    recordingId: string,
+    userId: string,
+    plaudClient: Awaited<ReturnType<typeof createPlaudClient>>,
+    existingRecording?: { id: string; hasPlaudTranscript: boolean; hasPlaudSummary: boolean },
+): Promise<void> {
+    // Skip if we already have both content types from Plaud
+    if (
+        existingRecording?.hasPlaudTranscript &&
+        existingRecording?.hasPlaudSummary
+    ) {
+        return;
+    }
+
+    try {
+        const content = await plaudClient.getRecordingContent(plaudRecording.id);
+
+        // Store transcript if available and not already pulled
+        if (
+            content.transcript &&
+            content.transcript.length > 0 &&
+            !existingRecording?.hasPlaudTranscript
+        ) {
+            const fullText = content.transcript
+                .map((seg) => `${seg.speaker}: ${seg.content}`)
+                .join("\n");
+
+            await db.insert(transcriptions).values({
+                recordingId,
+                userId,
+                text: fullText,
+                plaudSegments: content.transcript,
+                source: "plaud",
+                transcriptionType: "server",
+                provider: "plaud",
+                model: "plaud-ai",
+            });
+
+            await db
+                .update(recordings)
+                .set({ hasPlaudTranscript: true })
+                .where(eq(recordings.id, recordingId));
+        }
+
+        // Store summary/outline if available and not already pulled
+        if (
+            (content.summary || content.outline) &&
+            !existingRecording?.hasPlaudSummary
+        ) {
+            await db.insert(aiEnhancements).values({
+                recordingId,
+                userId,
+                summary: content.summary || null,
+                plaudOutline: content.outline || null,
+                source: "plaud",
+                provider: "plaud",
+                model: "plaud-ai",
+            });
+
+            await db
+                .update(recordings)
+                .set({ hasPlaudSummary: true })
+                .where(eq(recordings.id, recordingId));
+        }
+    } catch (error) {
+        console.error(
+            `Failed to fetch Plaud AI content for ${plaudRecording.id}:`,
+            error,
+        );
+        // Don't fail the whole sync for AI content fetch failures
+    }
+}
+
+/**
  * Process a single recording - download and save to database
  */
 async function processRecording(
@@ -61,11 +146,27 @@ async function processRecording(
 
         const versionKey = plaudRecording.version_ms.toString();
 
-        // Skip if already synced with same version
+        // If already synced with same version, check if we still need AI content
         if (
             existingRecording &&
             existingRecording.plaudVersion === versionKey
         ) {
+            // Still pull AI content if it's available but hasn't been fetched yet
+            const needsTranscript =
+                plaudRecording.is_trans && !existingRecording.hasPlaudTranscript;
+            const needsSummary =
+                plaudRecording.is_summary && !existingRecording.hasPlaudSummary;
+
+            if (needsTranscript || needsSummary) {
+                await fetchPlaudAIContent(
+                    plaudRecording,
+                    existingRecording.id,
+                    context.userId,
+                    plaudClient,
+                    existingRecording,
+                );
+            }
+
             return { status: "skipped" };
         }
 
@@ -100,28 +201,41 @@ async function processRecording(
             isTrash: plaudRecording.is_trash,
         };
 
+        let resultRecordingId: string;
+        let resultStatus: "new" | "updated";
+
         if (existingRecording) {
             // Update existing recording
             await db
                 .update(recordings)
                 .set({ ...recordingData, updatedAt: new Date() })
                 .where(eq(recordings.id, existingRecording.id));
-            return {
-                status: "updated",
-                recordingId: existingRecording.id,
-                filename: plaudRecording.filename,
-            };
+            resultRecordingId = existingRecording.id;
+            resultStatus = "updated";
+        } else {
+            // Insert new recording
+            const [newRecording] = await db
+                .insert(recordings)
+                .values(recordingData)
+                .returning({ id: recordings.id });
+            resultRecordingId = newRecording.id;
+            resultStatus = "new";
         }
 
-        // Insert new recording
-        const [newRecording] = await db
-            .insert(recordings)
-            .values(recordingData)
-            .returning({ id: recordings.id });
+        // Pull Plaud AI content (transcript, summary, outline)
+        if (plaudRecording.is_trans || plaudRecording.is_summary) {
+            await fetchPlaudAIContent(
+                plaudRecording,
+                resultRecordingId,
+                context.userId,
+                plaudClient,
+                existingRecording,
+            );
+        }
 
         return {
-            status: "new",
-            recordingId: newRecording.id,
+            status: resultStatus,
+            recordingId: resultRecordingId,
             filename: plaudRecording.filename,
         };
     } catch (error) {
