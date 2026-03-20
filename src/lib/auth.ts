@@ -18,7 +18,9 @@ export const auth = betterAuth({
     baseURL: env.APP_URL,
     trustedOrigins: [env.APP_URL || "http://localhost:3000"],
     advanced: {
-        useSecureCookies: env.APP_URL?.startsWith("https") ?? false,
+        // Disabled because Cloudflare terminates TLS — origin sees HTTP
+        // but cookies need to work regardless of protocol at the edge
+        useSecureCookies: false,
     },
 });
 
