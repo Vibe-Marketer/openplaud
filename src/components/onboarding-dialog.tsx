@@ -57,6 +57,8 @@ export function OnboardingDialog({
     const [server, setServer] = useState<PlaudServerKey>(DEFAULT_SERVER_KEY);
     const [isLoading, setIsLoading] = useState(false);
     const [hasPlaudConnection, setHasPlaudConnection] = useState(false);
+    const [plaudDevices, setPlaudDevices] = useState<{ name: string; model: string }[]>([]);
+    const [connectedEmail, setConnectedEmail] = useState("");
     const [hasAiProvider, setHasAiProvider] = useState(false);
 
     useEffect(() => {
@@ -142,8 +144,18 @@ export function OnboardingDialog({
                 throw new Error(error.error || "Failed to connect");
             }
 
+            const connectData = await connectResponse.json();
             toast.success("Plaud account connected!");
             setHasPlaudConnection(true);
+            setConnectedEmail(plaudEmail);
+            if (connectData.devices) {
+                setPlaudDevices(
+                    connectData.devices.map((d: { name: string; model: string }) => ({
+                        name: d.name,
+                        model: d.model,
+                    })),
+                );
+            }
             setPlaudEmail("");
             setPlaudPassword("");
         } catch (error) {
@@ -355,28 +367,50 @@ export function OnboardingDialog({
 
                             {hasPlaudConnection ? (
                                 <Card className="border-primary/50 bg-primary/5 py-3">
-                                    <CardContent className="px-4">
+                                    <CardContent className="px-4 space-y-3">
                                         <div className="flex items-center gap-3">
                                             <CheckCircle2 className="w-5 h-5 text-primary" />
                                             <div className="flex-1">
                                                 <p className="font-medium">
-                                                    Device Connected
+                                                    Plaud Account Connected
                                                 </p>
-                                                <p className="text-sm text-muted-foreground">
-                                                    Your Plaud device is already
-                                                    connected
-                                                </p>
+                                                {connectedEmail && (
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {connectedEmail}
+                                                    </p>
+                                                )}
                                             </div>
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                onClick={() =>
-                                                    setHasPlaudConnection(false)
-                                                }
+                                                onClick={() => {
+                                                    setHasPlaudConnection(false);
+                                                    setPlaudDevices([]);
+                                                    setConnectedEmail("");
+                                                }}
                                             >
                                                 Reconnect
                                             </Button>
                                         </div>
+                                        {plaudDevices.length > 0 && (
+                                            <div className="pl-8 space-y-1">
+                                                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                                    Devices Found
+                                                </p>
+                                                {plaudDevices.map((device, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className="flex items-center gap-2 text-sm"
+                                                    >
+                                                        <Mic className="w-3 h-3 text-primary" />
+                                                        <span>{device.name}</span>
+                                                        <span className="text-xs text-muted-foreground">
+                                                            ({device.model})
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </CardContent>
                                 </Card>
                             ) : (
@@ -562,50 +596,54 @@ export function OnboardingDialog({
                                     <Bot className="w-8 h-8 text-primary" />
                                 </div>
                                 <h3 className="text-xl font-semibold">
-                                    Set Up AI Provider
+                                    Transcription
                                 </h3>
                                 <p className="text-muted-foreground">
-                                    Configure an AI provider to enable automatic
-                                    transcriptions
+                                    How your recordings get transcribed
                                 </p>
                             </div>
 
-                            {hasAiProvider ? (
+                            <Card className="gap-0 py-4">
+                                <CardContent className="space-y-4">
+                                    <div className="flex items-start gap-3">
+                                        <CheckCircle2 className="w-5 h-5 text-primary mt-0.5" />
+                                        <div>
+                                            <p className="font-medium">
+                                                Plaud AI (default)
+                                            </p>
+                                            <p className="text-sm text-muted-foreground">
+                                                Plaud&apos;s built-in AI handles
+                                                transcription and summaries
+                                                automatically. No setup needed.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <Sparkles className="w-5 h-5 text-muted-foreground mt-0.5" />
+                                        <div>
+                                            <p className="font-medium text-muted-foreground">
+                                                Your own AI (optional)
+                                            </p>
+                                            <p className="text-sm text-muted-foreground">
+                                                You can add your own OpenAI,
+                                                Groq, or compatible API key in
+                                                Settings for AI-generated titles
+                                                and custom transcription.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            {hasAiProvider && (
                                 <Card className="border-primary/50 bg-primary/5 py-3">
                                     <CardContent>
                                         <div className="flex items-center gap-3">
                                             <CheckCircle2 className="w-5 h-5 text-primary" />
-                                            <div className="flex-1">
-                                                <p className="font-medium">
-                                                    AI Provider Configured
-                                                </p>
-                                                <p className="text-sm text-muted-foreground">
-                                                    You already have an AI
-                                                    provider set up
-                                                </p>
-                                            </div>
+                                            <p className="font-medium">
+                                                AI provider already configured
+                                            </p>
                                         </div>
-                                    </CardContent>
-                                </Card>
-                            ) : (
-                                <Card className="gap-0 py-4">
-                                    <CardContent className="pt-6 space-y-4">
-                                        <p className="text-sm text-muted-foreground">
-                                            You can set up an AI provider later
-                                            in Settings. This enables automatic
-                                            transcription of your recordings.
-                                        </p>
-                                        <Button
-                                            onClick={() => {
-                                                onOpenChange(false);
-                                                window.location.href =
-                                                    "/dashboard?settings=providers";
-                                            }}
-                                            variant="outline"
-                                            className="w-full"
-                                        >
-                                            Go to Settings
-                                        </Button>
                                     </CardContent>
                                 </Card>
                             )}
