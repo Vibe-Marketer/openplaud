@@ -50,6 +50,8 @@ export function TranscriptionSection() {
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
     const [autoTranscribe, setAutoTranscribe] = useState(false);
+    const [autoTranscribeProvider, setAutoTranscribeProvider] =
+        useState("user");
     const [defaultTranscriptionLanguage, setDefaultTranscriptionLanguage] =
         useState<string | null>(null);
     const [transcriptionQuality, setTranscriptionQuality] =
@@ -65,6 +67,9 @@ export function TranscriptionSection() {
                 if (response.ok) {
                     const data = await response.json();
                     setAutoTranscribe(data.autoTranscribe ?? false);
+                    setAutoTranscribeProvider(
+                        data.autoTranscribeProvider ?? "user",
+                    );
                     setDefaultTranscriptionLanguage(
                         data.defaultTranscriptionLanguage ?? null,
                     );
@@ -108,11 +113,17 @@ export function TranscriptionSection() {
     };
 
     const handleTranscriptionSettingChange = async (updates: {
+        autoTranscribeProvider?: string;
         defaultTranscriptionLanguage?: string | null;
         transcriptionQuality?: string;
         autoGenerateTitle?: boolean;
         syncTitleToPlaud?: boolean;
     }) => {
+        if (updates.autoTranscribeProvider !== undefined) {
+            const previous = autoTranscribeProvider;
+            setAutoTranscribeProvider(updates.autoTranscribeProvider);
+            pendingChangesRef.current.set("autoTranscribeProvider", previous);
+        }
         if (updates.defaultTranscriptionLanguage !== undefined) {
             const previous = defaultTranscriptionLanguage;
             setDefaultTranscriptionLanguage(
@@ -150,6 +161,9 @@ export function TranscriptionSection() {
                 throw new Error("Failed to save settings");
             }
 
+            if (updates.autoTranscribeProvider !== undefined) {
+                pendingChangesRef.current.delete("autoTranscribeProvider");
+            }
             if (updates.defaultTranscriptionLanguage !== undefined) {
                 pendingChangesRef.current.delete(
                     "defaultTranscriptionLanguage",
@@ -165,6 +179,14 @@ export function TranscriptionSection() {
                 pendingChangesRef.current.delete("syncTitleToPlaud");
             }
         } catch {
+            if (updates.autoTranscribeProvider !== undefined) {
+                const previous =
+                    pendingChangesRef.current.get("autoTranscribeProvider");
+                if (previous !== undefined && typeof previous === "string") {
+                    setAutoTranscribeProvider(previous);
+                    pendingChangesRef.current.delete("autoTranscribeProvider");
+                }
+            }
             if (updates.defaultTranscriptionLanguage !== undefined) {
                 const previous = pendingChangesRef.current.get(
                     "defaultTranscriptionLanguage",
@@ -240,6 +262,58 @@ export function TranscriptionSection() {
                         disabled={isSavingSettings}
                     />
                 </div>
+
+                {autoTranscribe && (
+                    <div className="space-y-2 pl-4 border-l-2 border-primary/20">
+                        <Label htmlFor="auto-transcribe-provider">
+                            Auto-transcription provider
+                        </Label>
+                        <Select
+                            value={autoTranscribeProvider}
+                            onValueChange={(value) => {
+                                handleTranscriptionSettingChange({
+                                    autoTranscribeProvider: value,
+                                });
+                            }}
+                            disabled={isSavingSettings}
+                        >
+                            <SelectTrigger
+                                id="auto-transcribe-provider"
+                                className="w-full"
+                            >
+                                <SelectValue>
+                                    {autoTranscribeProvider === "plaud"
+                                        ? "Plaud AI"
+                                        : "Your AI Provider"}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="user">
+                                    <div>
+                                        <div>Your AI Provider</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            Uses your configured OpenAI, Groq,
+                                            or other provider
+                                        </div>
+                                    </div>
+                                </SelectItem>
+                                <SelectItem value="plaud">
+                                    <div>
+                                        <div>Plaud AI</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            Uses Plaud&apos;s built-in
+                                            transcription
+                                        </div>
+                                    </div>
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                            Choose which service handles automatic transcription
+                            of new recordings
+                        </p>
+                    </div>
+                )}
 
                 <div className="space-y-2">
                     <Label htmlFor="transcription-language">

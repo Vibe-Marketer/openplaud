@@ -6,6 +6,7 @@ import type {
     PlaudRecordingsResponse,
     PlaudTempUrlResponse,
     PlaudTranscriptSegment,
+    PlaudTransSummResponse,
 } from "@/types/plaud";
 import { DEFAULT_SERVER_KEY, PLAUD_SERVERS } from "./servers";
 
@@ -291,6 +292,73 @@ export class PlaudClient {
         }
 
         return result;
+    }
+
+    /**
+     * Trigger Plaud's AI transcription and summary generation for a recording.
+     * This is an async operation — the result won't be immediately available.
+     * Use waitForTranscription() to poll until complete.
+     */
+    async triggerTranscription(
+        fileId: string,
+        language: string = "auto",
+        timezone: number = -7,
+    ): Promise<PlaudTransSummResponse> {
+        return this.request<PlaudTransSummResponse>(
+            `/ai/transsumm/${fileId}`,
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    is_reload: 0,
+                    summ_type: "AUTO-SELECT",
+                    summ_type_type: "system",
+                    info: JSON.stringify({
+                        language,
+                        timezone,
+                        diarization: 1,
+                        llm: "auto",
+                    }),
+                    support_mul_summ: true,
+                }),
+            },
+        );
+    }
+
+    /**
+     * Poll until a recording's transcription is ready.
+     * Returns true if transcription completed, false if timed out.
+     * @param fileId - The Plaud file ID
+     * @param maxWaitMs - Maximum time to wait (default: 10 minutes)
+     * @param pollIntervalMs - How often to check (default: 15 seconds)
+     */
+    async waitForTranscription(
+        fileId: string,
+        maxWaitMs: number = 600000,
+        pollIntervalMs: number = 15000,
+    ): Promise<boolean> {
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < maxWaitMs) {
+            await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+
+            try {
+                const allRecordings = await this.getRecordings(0, 200);
+                const recording = allRecordings.data_file_list.find(
+                    (r) => r.id === fileId,
+                );
+
+                if (recording && recording.is_trans && recording.is_summary) {
+                    return true;
+                }
+            } catch (error) {
+                console.error(
+                    `Error polling transcription status for ${fileId}:`,
+                    error,
+                );
+            }
+        }
+
+        return false;
     }
 }
 

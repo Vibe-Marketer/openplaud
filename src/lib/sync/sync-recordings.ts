@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
     aiEnhancements,
@@ -34,6 +34,8 @@ interface SyncResult {
     errors: string[];
     /** IDs of recordings that need transcription */
     pendingTranscriptionIds: string[];
+    /** Number of Plaud transcriptions triggered for untranscribed recordings */
+    triggeredTranscriptions: number;
 }
 
 interface SyncContext {
@@ -136,6 +138,8 @@ async function processRecording(
     recordingId?: string;
     filename?: string;
     error?: string;
+    /** Plaud file ID that needs transcription triggered (is_trans is false) */
+    needsPlaudTranscription?: string;
 }> {
     try {
         const [existingRecording] = await db
@@ -167,7 +171,11 @@ async function processRecording(
                 );
             }
 
-            return { status: "skipped" };
+            return {
+                status: "skipped",
+                // If Plaud hasn't transcribed yet, flag for trigger
+                needsPlaudTranscription: !plaudRecording.is_trans ? plaudRecording.id : undefined,
+            };
         }
 
         // Download the audio file
@@ -205,13 +213,34 @@ async function processRecording(
         let resultStatus: "new" | "updated";
 
         if (existingRecording) {
-            // Update existing recording
+            // Update existing recording (version changed)
             await db
                 .update(recordings)
                 .set({ ...recordingData, updatedAt: new Date() })
                 .where(eq(recordings.id, existingRecording.id));
             resultRecordingId = existingRecording.id;
             resultStatus = "updated";
+
+            // Version changed — re-pull Plaud AI content if available
+            if (plaudRecording.is_trans || plaudRecording.is_summary) {
+                // Delete old plaud-sourced content first
+                await db.delete(transcriptions)
+                    .where(and(
+                        eq(transcriptions.recordingId, existingRecording.id),
+                        eq(transcriptions.source, "plaud"),
+                    ));
+                await db.delete(aiEnhancements)
+                    .where(and(
+                        eq(aiEnhancements.recordingId, existingRecording.id),
+                        eq(aiEnhancements.source, "plaud"),
+                    ));
+
+                // Reset flags so fetchPlaudAIContent pulls fresh
+                await db
+                    .update(recordings)
+                    .set({ hasPlaudTranscript: false, hasPlaudSummary: false })
+                    .where(eq(recordings.id, existingRecording.id));
+            }
         } else {
             // Insert new recording
             const [newRecording] = await db
@@ -224,12 +253,13 @@ async function processRecording(
 
         // Pull Plaud AI content (transcript, summary, outline)
         if (plaudRecording.is_trans || plaudRecording.is_summary) {
+            // For updated recordings, don't pass existingRecording since we cleared the flags above
             await fetchPlaudAIContent(
                 plaudRecording,
                 resultRecordingId,
                 context.userId,
                 plaudClient,
-                existingRecording,
+                resultStatus === "updated" ? undefined : undefined,
             );
         }
 
@@ -237,6 +267,8 @@ async function processRecording(
             status: resultStatus,
             recordingId: resultRecordingId,
             filename: plaudRecording.filename,
+            // If Plaud hasn't transcribed yet, flag for trigger
+            needsPlaudTranscription: !plaudRecording.is_trans ? plaudRecording.id : undefined,
         };
     } catch (error) {
         return {
@@ -260,6 +292,7 @@ async function processBatch(
     errors: string[];
     newRecordingIds: string[];
     newRecordingNames: string[];
+    plaudFileIdsToTranscribe: string[];
 }> {
     const results = await Promise.allSettled(
         batch.map((rec) =>
@@ -272,10 +305,11 @@ async function processBatch(
     const errors: string[] = [];
     const newRecordingIds: string[] = [];
     const newRecordingNames: string[] = [];
+    const plaudFileIdsToTranscribe: string[] = [];
 
     for (const result of results) {
         if (result.status === "fulfilled") {
-            const { status, recordingId, filename, error } = result.value;
+            const { status, recordingId, filename, error, needsPlaudTranscription } = result.value;
             if (status === "new" && recordingId) {
                 newCount++;
                 newRecordingIds.push(recordingId);
@@ -284,6 +318,9 @@ async function processBatch(
                 updatedCount++;
             } else if (status === "error" && error) {
                 errors.push(error);
+            }
+            if (needsPlaudTranscription) {
+                plaudFileIdsToTranscribe.push(needsPlaudTranscription);
             }
         } else {
             errors.push(`Batch processing error: ${result.reason}`);
@@ -296,6 +333,7 @@ async function processBatch(
         errors,
         newRecordingIds,
         newRecordingNames,
+        plaudFileIdsToTranscribe,
     };
 }
 
@@ -316,6 +354,7 @@ export async function syncRecordingsForUser(
         updatedRecordings: 0,
         errors: [],
         pendingTranscriptionIds: [],
+        triggeredTranscriptions: 0,
     };
 
     try {
@@ -360,6 +399,7 @@ export async function syncRecordingsForUser(
         );
         const storage = await createUserStorageProvider(userId);
         const allNewRecordingNames: string[] = [];
+        const allPlaudFileIdsToTranscribe: string[] = [];
 
         // Paginated sync - fetch newest first
         let page = 0;
@@ -406,6 +446,7 @@ export async function syncRecordingsForUser(
                     ...batchResult.newRecordingIds,
                 );
                 allNewRecordingNames.push(...batchResult.newRecordingNames);
+                allPlaudFileIdsToTranscribe.push(...batchResult.plaudFileIdsToTranscribe);
             }
 
             // Early exit optimization: if we got fewer recordings than requested,
@@ -425,6 +466,20 @@ export async function syncRecordingsForUser(
             }
 
             page++;
+        }
+
+        // Trigger Plaud transcription for untranscribed recordings (fire-and-forget)
+        // The next sync cycle will detect is_trans flipped to true and pull content
+        if (allPlaudFileIdsToTranscribe.length > 0) {
+            for (const fileId of allPlaudFileIdsToTranscribe) {
+                try {
+                    await plaudClient.triggerTranscription(fileId);
+                    result.triggeredTranscriptions++;
+                    console.log(`Triggered Plaud transcription for ${fileId}`);
+                } catch (error) {
+                    console.error(`Failed to trigger transcription for ${fileId}:`, error);
+                }
+            }
         }
 
         // Update last sync time

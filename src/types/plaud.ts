@@ -104,3 +104,13 @@ export interface PlaudOutlineItem {
     end_time: number;
     topic: string;
 }
+
+export interface PlaudTransSummResponse {
+    status: number;
+    msg: string;
+    request_id: string;
+    err_code: string;
+    err_msg: string;
+    auto_save: boolean;
+    ppc_status: number | null;
+}

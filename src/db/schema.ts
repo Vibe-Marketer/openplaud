@@ -274,6 +274,8 @@ export const userSettings = pgTable("user_settings", {
     syncInterval: integer("sync_interval").notNull().default(300000),
     // Auto-transcribe new recordings
     autoTranscribe: boolean("auto_transcribe").notNull().default(false),
+    // Auto-transcription provider: 'user' (configured AI provider) or 'plaud' (Plaud's built-in AI)
+    autoTranscribeProvider: varchar("auto_transcribe_provider", { length: 20 }).default("user").notNull(),
     // Sync settings
     autoSyncEnabled: boolean("auto_sync_enabled").notNull().default(true),
     syncOnMount: boolean("sync_on_mount").notNull().default(true),

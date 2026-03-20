@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 // Default settings values
 const DEFAULT_SETTINGS = {
     autoTranscribe: false,
+    autoTranscribeProvider: "user" as const,
     syncInterval: 300000, // 5 minutes in milliseconds
     autoSyncEnabled: true,
     syncOnMount: true,
@@ -40,6 +41,7 @@ const DEFAULT_SETTINGS = {
 // Settings field names (excluding userId, id, createdAt, updatedAt)
 const SETTINGS_FIELDS = [
     "autoTranscribe",
+    "autoTranscribeProvider",
     "syncInterval",
     "autoSyncEnabled",
     "syncOnMount",
