@@ -53,7 +53,7 @@ export function OnboardingDialog({
     const [plaudEmail, setPlaudEmail] = useState("");
     const [plaudPassword, setPlaudPassword] = useState("");
     const [bearerToken, setBearerToken] = useState("");
-    const [plaudAuthMode, setPlaudAuthMode] = useState<"login" | "token">("login");
+    const [plaudAuthMode, setPlaudAuthMode] = useState<"login" | "google" | "token">("google");
     const [server, setServer] = useState<PlaudServerKey>(DEFAULT_SERVER_KEY);
     const [isLoading, setIsLoading] = useState(false);
     const [hasPlaudConnection, setHasPlaudConnection] = useState(false);
@@ -454,7 +454,116 @@ export function OnboardingDialog({
                                             </Select>
                                         </div>
 
-                                        {plaudAuthMode === "login" ? (
+                                        {plaudAuthMode === "google" && (
+                                            <>
+                                                <div className="space-y-3">
+                                                    <Button
+                                                        variant="outline"
+                                                        className="w-full"
+                                                        onClick={() => {
+                                                            window.open(
+                                                                "https://web.plaud.ai",
+                                                                "plaud-login",
+                                                                "width=500,height=700,left=200,top=100",
+                                                            );
+                                                        }}
+                                                    >
+                                                        1. Open Plaud Login
+                                                        (popup)
+                                                    </Button>
+
+                                                    <div className="bg-muted rounded-lg p-4 space-y-2 text-sm">
+                                                        <p className="font-medium">
+                                                            2. After logging in,
+                                                            copy your token:
+                                                        </p>
+                                                        <div className="flex items-center gap-2">
+                                                            <code className="flex-1 bg-background rounded px-3 py-2 text-xs font-mono select-all border">
+                                                                copy(localStorage.getItem(&apos;tokenstr&apos;))
+                                                            </code>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => {
+                                                                    navigator.clipboard.writeText(
+                                                                        "copy(localStorage.getItem('tokenstr'))",
+                                                                    );
+                                                                    toast.success(
+                                                                        "Copied! Now paste in the Plaud popup console (F12)",
+                                                                    );
+                                                                }}
+                                                            >
+                                                                Copy
+                                                            </Button>
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            In the Plaud popup:
+                                                            press{" "}
+                                                            <kbd className="bg-background px-1 rounded border text-xs">
+                                                                F12
+                                                            </kbd>{" "}
+                                                            → click{" "}
+                                                            <strong>
+                                                                Console
+                                                            </strong>{" "}
+                                                            → paste the command
+                                                            above → press Enter.
+                                                            Your token is now on
+                                                            your clipboard.
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="bearer-token-google">
+                                                        3. Paste your token here
+                                                    </Label>
+                                                    <Input
+                                                        id="bearer-token-google"
+                                                        type="password"
+                                                        placeholder="Paste your token here"
+                                                        value={bearerToken}
+                                                        onChange={(e) =>
+                                                            setBearerToken(
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        disabled={isLoading}
+                                                    />
+                                                </div>
+
+                                                <Button
+                                                    onClick={
+                                                        handlePlaudTokenConnect
+                                                    }
+                                                    disabled={
+                                                        isLoading ||
+                                                        !bearerToken.trim()
+                                                    }
+                                                    className="w-full"
+                                                >
+                                                    {isLoading
+                                                        ? "Connecting..."
+                                                        : "Connect Plaud Account"}
+                                                </Button>
+
+                                                <div className="flex justify-center gap-4">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setPlaudAuthMode(
+                                                                "login",
+                                                            )
+                                                        }
+                                                        className="text-xs text-muted-foreground hover:text-foreground underline"
+                                                    >
+                                                        Use email/password
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {plaudAuthMode === "login" && (
                                             <>
                                                 <div className="space-y-2">
                                                     <Label htmlFor="plaud-email">
@@ -513,19 +622,35 @@ export function OnboardingDialog({
                                                         : "Connect Plaud Account"}
                                                 </Button>
 
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        setPlaudAuthMode(
-                                                            "token",
-                                                        )
-                                                    }
-                                                    className="text-xs text-muted-foreground hover:text-foreground underline w-full text-center"
-                                                >
-                                                    Use bearer token instead
-                                                </button>
+                                                <div className="flex justify-center gap-4">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setPlaudAuthMode(
+                                                                "google",
+                                                            )
+                                                        }
+                                                        className="text-xs text-muted-foreground hover:text-foreground underline"
+                                                    >
+                                                        Sign in with
+                                                        Google/Apple
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setPlaudAuthMode(
+                                                                "token",
+                                                            )
+                                                        }
+                                                        className="text-xs text-muted-foreground hover:text-foreground underline"
+                                                    >
+                                                        Paste bearer token
+                                                    </button>
+                                                </div>
                                             </>
-                                        ) : (
+                                        )}
+
+                                        {plaudAuthMode === "token" && (
                                             <>
                                                 <div className="space-y-2">
                                                     <Label htmlFor="bearer-token">
@@ -544,9 +669,9 @@ export function OnboardingDialog({
                                                         disabled={isLoading}
                                                     />
                                                     <p className="text-xs text-muted-foreground">
-                                                        Go to web.plaud.ai, log
-                                                        in, open DevTools (F12)
-                                                        → Application → Local
+                                                        Go to web.plaud.ai →
+                                                        log in → F12 →
+                                                        Application → Local
                                                         Storage → copy{" "}
                                                         <code className="bg-muted px-1 rounded">
                                                             tokenstr
@@ -569,18 +694,31 @@ export function OnboardingDialog({
                                                         : "Connect Device"}
                                                 </Button>
 
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        setPlaudAuthMode(
-                                                            "login",
-                                                        )
-                                                    }
-                                                    className="text-xs text-muted-foreground hover:text-foreground underline w-full text-center"
-                                                >
-                                                    Sign in with Plaud account
-                                                    instead
-                                                </button>
+                                                <div className="flex justify-center gap-4">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setPlaudAuthMode(
+                                                                "google",
+                                                            )
+                                                        }
+                                                        className="text-xs text-muted-foreground hover:text-foreground underline"
+                                                    >
+                                                        Sign in with
+                                                        Google/Apple
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setPlaudAuthMode(
+                                                                "login",
+                                                            )
+                                                        }
+                                                        className="text-xs text-muted-foreground hover:text-foreground underline"
+                                                    >
+                                                        Use email/password
+                                                    </button>
+                                                </div>
                                             </>
                                         )}
                                     </CardContent>
