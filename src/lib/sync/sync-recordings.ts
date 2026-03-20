@@ -41,6 +41,7 @@ interface SyncResult {
 interface SyncContext {
     userId: string;
     autoTranscribe: boolean;
+    autoTranscribeProvider: "plaud" | "user";
     emailNotifications: boolean;
     barkNotifications: boolean;
     notificationEmail: string | null;
@@ -386,6 +387,7 @@ export async function syncRecordingsForUser(
         const context: SyncContext = {
             userId,
             autoTranscribe: settings?.autoTranscribe ?? false,
+            autoTranscribeProvider: (settings?.autoTranscribeProvider as "plaud" | "user") ?? "user",
             emailNotifications: settings?.emailNotifications ?? false,
             barkNotifications: settings?.barkNotifications ?? false,
             notificationEmail:
@@ -469,8 +471,8 @@ export async function syncRecordingsForUser(
         }
 
         // Trigger Plaud transcription for untranscribed recordings (fire-and-forget)
-        // The next sync cycle will detect is_trans flipped to true and pull content
-        if (allPlaudFileIdsToTranscribe.length > 0) {
+        // Only when provider is "plaud" — otherwise user's AI handles transcription
+        if (context.autoTranscribe && context.autoTranscribeProvider === "plaud" && allPlaudFileIdsToTranscribe.length > 0) {
             for (const fileId of allPlaudFileIdsToTranscribe) {
                 try {
                     await plaudClient.triggerTranscription(fileId);
@@ -526,9 +528,11 @@ export async function syncRecordingsForUser(
             }
         }
 
-        // Queue transcription for new recordings (runs after sync response)
+        // Queue user AI transcription for new recordings (runs after sync response)
+        // Only when provider is "user" — when "plaud", Plaud handles transcription above
         if (
             context.autoTranscribe &&
+            context.autoTranscribeProvider === "user" &&
             result.pendingTranscriptionIds.length > 0
         ) {
             // Run transcription in background, don't await
