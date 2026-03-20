@@ -1,6 +1,6 @@
 "use client";
 
-import { Mic, RefreshCw, Settings } from "lucide-react";
+import { LogOut, Mic, RefreshCw, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -219,6 +219,20 @@ export function Workstation({ recordings, transcriptions }: WorkstationProps) {
                                 size="icon"
                             >
                                 <Settings className="w-4 h-4" />
+                            </Button>
+                            <Button
+                                onClick={async () => {
+                                    const { signOut } = await import(
+                                        "@/lib/auth-client"
+                                    );
+                                    await signOut();
+                                    router.push("/login");
+                                }}
+                                variant="outline"
+                                size="icon"
+                                title="Sign out"
+                            >
+                                <LogOut className="w-4 h-4" />
                             </Button>
                         </div>
                     </div>
