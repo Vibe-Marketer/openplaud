@@ -50,7 +50,10 @@ export function OnboardingDialog({
 }: OnboardingDialogProps) {
     const router = useRouter();
     const [step, setStep] = useState<OnboardingStep>("welcome");
+    const [plaudEmail, setPlaudEmail] = useState("");
+    const [plaudPassword, setPlaudPassword] = useState("");
     const [bearerToken, setBearerToken] = useState("");
+    const [plaudAuthMode, setPlaudAuthMode] = useState<"login" | "token">("login");
     const [server, setServer] = useState<PlaudServerKey>(DEFAULT_SERVER_KEY);
     const [isLoading, setIsLoading] = useState(false);
     const [hasPlaudConnection, setHasPlaudConnection] = useState(false);
@@ -88,7 +91,10 @@ export function OnboardingDialog({
     useEffect(() => {
         if (!open) {
             setStep("welcome");
+            setPlaudEmail("");
+            setPlaudPassword("");
             setBearerToken("");
+            setPlaudAuthMode("login");
             setServer(DEFAULT_SERVER_KEY);
             setIsLoading(false);
             setHasPlaudConnection(false);
@@ -97,6 +103,61 @@ export function OnboardingDialog({
     }, [open]);
 
     const handlePlaudConnect = async () => {
+        if (!plaudEmail.trim() || !plaudPassword.trim()) {
+            toast.error("Please enter your Plaud email and password");
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            // Step 1: Log into Plaud to get bearer token
+            const loginResponse = await fetch("/api/plaud/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email: plaudEmail,
+                    password: plaudPassword,
+                    server,
+                }),
+            });
+
+            const loginData = await loginResponse.json();
+
+            if (!loginResponse.ok) {
+                throw new Error(loginData.error || "Invalid Plaud credentials");
+            }
+
+            // Step 2: Connect with the token
+            const connectResponse = await fetch("/api/plaud/connect", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    bearerToken: loginData.bearerToken,
+                    server,
+                }),
+            });
+
+            if (!connectResponse.ok) {
+                const error = await connectResponse.json();
+                throw new Error(error.error || "Failed to connect");
+            }
+
+            toast.success("Plaud account connected!");
+            setHasPlaudConnection(true);
+            setPlaudEmail("");
+            setPlaudPassword("");
+        } catch (error) {
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to connect to Plaud",
+            );
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handlePlaudTokenConnect = async () => {
         if (!bearerToken.trim()) {
             toast.error("Please enter your bearer token");
             return;
@@ -284,10 +345,10 @@ export function OnboardingDialog({
                                     <Mic className="w-8 h-8 text-primary" />
                                 </div>
                                 <h3 className="text-xl font-semibold">
-                                    Connect Your Plaud Device
+                                    Connect Your Plaud Account
                                 </h3>
                                 <p className="text-muted-foreground">
-                                    Enter your Plaud bearer token to sync
+                                    Sign in with your Plaud account to sync
                                     recordings automatically
                                 </p>
                             </div>
@@ -323,7 +384,7 @@ export function OnboardingDialog({
                                     <CardContent className="pt-6 space-y-4">
                                         <div className="space-y-2">
                                             <Label htmlFor="api-server">
-                                                API Server
+                                                Region
                                             </Label>
                                             <Select
                                                 value={server}
@@ -337,7 +398,7 @@ export function OnboardingDialog({
                                                     id="api-server"
                                                     disabled={isLoading}
                                                 >
-                                                    <SelectValue placeholder="Select API server" />
+                                                    <SelectValue placeholder="Select your region" />
                                                 </SelectTrigger>
                                                 <SelectContent className="z-[200]">
                                                     {(
@@ -357,50 +418,137 @@ export function OnboardingDialog({
                                                     ))}
                                                 </SelectContent>
                                             </Select>
-                                            <p className="text-xs text-muted-foreground">
-                                                {
-                                                    PLAUD_SERVERS[server]
-                                                        .description
-                                                }
-                                            </p>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="bearer-token">
-                                                Bearer Token
-                                            </Label>
-                                            <Input
-                                                id="bearer-token"
-                                                type="password"
-                                                placeholder="Enter your Plaud bearer token"
-                                                value={bearerToken}
-                                                onChange={(e) =>
-                                                    setBearerToken(
-                                                        e.target.value,
-                                                    )
-                                                }
-                                                disabled={isLoading}
-                                            />
-                                            <p className="text-xs text-muted-foreground">
-                                                Open plaud.ai in a browser, log
-                                                in, open DevTools (F12) →
-                                                Network tab, refresh and copy
-                                                the Authorization header value
-                                                from any request to the Plaud
-                                                API server.
-                                            </p>
                                         </div>
 
-                                        <Button
-                                            onClick={handlePlaudConnect}
-                                            disabled={
-                                                isLoading || !bearerToken.trim()
-                                            }
-                                            className="w-full"
-                                        >
-                                            {isLoading
-                                                ? "Connecting..."
-                                                : "Connect Device"}
-                                        </Button>
+                                        {plaudAuthMode === "login" ? (
+                                            <>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="plaud-email">
+                                                        Plaud Email
+                                                    </Label>
+                                                    <Input
+                                                        id="plaud-email"
+                                                        type="email"
+                                                        placeholder="your@email.com"
+                                                        value={plaudEmail}
+                                                        onChange={(e) =>
+                                                            setPlaudEmail(
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        disabled={isLoading}
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="plaud-password">
+                                                        Plaud Password
+                                                    </Label>
+                                                    <Input
+                                                        id="plaud-password"
+                                                        type="password"
+                                                        placeholder="Your Plaud password"
+                                                        value={plaudPassword}
+                                                        onChange={(e) =>
+                                                            setPlaudPassword(
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        disabled={isLoading}
+                                                    />
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Your password is only
+                                                        used to obtain an access
+                                                        token and is never
+                                                        stored.
+                                                    </p>
+                                                </div>
+
+                                                <Button
+                                                    onClick={
+                                                        handlePlaudConnect
+                                                    }
+                                                    disabled={
+                                                        isLoading ||
+                                                        !plaudEmail.trim() ||
+                                                        !plaudPassword.trim()
+                                                    }
+                                                    className="w-full"
+                                                >
+                                                    {isLoading
+                                                        ? "Connecting..."
+                                                        : "Connect Plaud Account"}
+                                                </Button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setPlaudAuthMode(
+                                                            "token",
+                                                        )
+                                                    }
+                                                    className="text-xs text-muted-foreground hover:text-foreground underline w-full text-center"
+                                                >
+                                                    Use bearer token instead
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="bearer-token">
+                                                        Bearer Token
+                                                    </Label>
+                                                    <Input
+                                                        id="bearer-token"
+                                                        type="password"
+                                                        placeholder="Paste your Plaud bearer token"
+                                                        value={bearerToken}
+                                                        onChange={(e) =>
+                                                            setBearerToken(
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        disabled={isLoading}
+                                                    />
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Go to web.plaud.ai, log
+                                                        in, open DevTools (F12)
+                                                        → Application → Local
+                                                        Storage → copy{" "}
+                                                        <code className="bg-muted px-1 rounded">
+                                                            tokenstr
+                                                        </code>
+                                                    </p>
+                                                </div>
+
+                                                <Button
+                                                    onClick={
+                                                        handlePlaudTokenConnect
+                                                    }
+                                                    disabled={
+                                                        isLoading ||
+                                                        !bearerToken.trim()
+                                                    }
+                                                    className="w-full"
+                                                >
+                                                    {isLoading
+                                                        ? "Connecting..."
+                                                        : "Connect Device"}
+                                                </Button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setPlaudAuthMode(
+                                                            "login",
+                                                        )
+                                                    }
+                                                    className="text-xs text-muted-foreground hover:text-foreground underline w-full text-center"
+                                                >
+                                                    Sign in with Plaud account
+                                                    instead
+                                                </button>
+                                            </>
+                                        )}
                                     </CardContent>
                                 </Card>
                             )}
