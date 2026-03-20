@@ -62,7 +62,7 @@ export function TranscriptionPanel({
                     </div>
                 ) : transcription?.text ? (
                     <div className="space-y-4">
-                        <div className="bg-muted rounded-lg p-4 max-h-96 overflow-y-auto">
+                        <div className="bg-muted rounded-lg p-4">
                             <p className="text-sm whitespace-pre-wrap leading-relaxed">
                                 {transcription.text}
                             </p>

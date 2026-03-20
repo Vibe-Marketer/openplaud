@@ -176,8 +176,8 @@ export function Workstation({ recordings, transcriptions }: WorkstationProps) {
 
     return (
         <>
-            <div className="bg-background">
-                <div className="container mx-auto px-4 py-6 max-w-7xl">
+            <div className="bg-background flex-1 flex flex-col min-h-0">
+                <div className="container mx-auto px-4 py-6 max-w-7xl flex-1 flex flex-col min-h-0">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-3xl font-bold">Recordings</h1>
@@ -253,8 +253,8 @@ export function Workstation({ recordings, transcriptions }: WorkstationProps) {
                             </CardContent>
                         </Card>
                     ) : (
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div className="lg:col-span-1">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
+                            <div className="lg:col-span-1 overflow-y-auto min-h-0">
                                 <RecordingList
                                     recordings={recordings}
                                     currentRecording={currentRecording}
@@ -262,7 +262,7 @@ export function Workstation({ recordings, transcriptions }: WorkstationProps) {
                                 />
                             </div>
 
-                            <div className="lg:col-span-2 space-y-6">
+                            <div className="lg:col-span-2 space-y-6 overflow-y-auto min-h-0">
                                 {currentRecording ? (
                                     <>
                                         <RecordingPlayer
