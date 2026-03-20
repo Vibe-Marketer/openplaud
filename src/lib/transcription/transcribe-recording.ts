@@ -147,6 +147,7 @@ export async function transcribeRecording(
                 .set({
                     text: transcriptionText,
                     detectedLanguage,
+                    source: "user",
                     transcriptionType: "server",
                     provider: credentials.provider,
                     model: credentials.defaultModel || "whisper-1",
@@ -158,6 +159,7 @@ export async function transcribeRecording(
                 userId,
                 text: transcriptionText,
                 detectedLanguage,
+                source: "user",
                 transcriptionType: "server",
                 provider: credentials.provider,
                 model: credentials.defaultModel || "whisper-1",

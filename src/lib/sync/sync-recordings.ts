@@ -11,6 +11,7 @@ import {
 import { env } from "@/lib/env";
 import { sendNewRecordingBarkNotification } from "@/lib/notifications/bark";
 import { sendNewRecordingEmail } from "@/lib/notifications/email";
+import { generateTitleFromTranscription } from "@/lib/ai/generate-title";
 import { createPlaudClient } from "@/lib/plaud/client";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
@@ -42,6 +43,8 @@ interface SyncContext {
     userId: string;
     autoTranscribe: boolean;
     autoTranscribeProvider: "plaud" | "user";
+    autoGenerateTitle: boolean;
+    syncTitleToPlaud: boolean;
     emailNotifications: boolean;
     barkNotifications: boolean;
     notificationEmail: string | null;
@@ -57,6 +60,7 @@ async function fetchPlaudAIContent(
     recordingId: string,
     userId: string,
     plaudClient: Awaited<ReturnType<typeof createPlaudClient>>,
+    context: SyncContext,
     existingRecording?: { id: string; hasPlaudTranscript: boolean; hasPlaudSummary: boolean },
 ): Promise<void> {
     // Skip if we already have both content types from Plaud
@@ -69,6 +73,8 @@ async function fetchPlaudAIContent(
 
     try {
         const content = await plaudClient.getRecordingContent(plaudRecording.id);
+
+        let newTranscriptText: string | null = null;
 
         // Store transcript if available and not already pulled
         if (
@@ -95,6 +101,8 @@ async function fetchPlaudAIContent(
                 .update(recordings)
                 .set({ hasPlaudTranscript: true })
                 .where(eq(recordings.id, recordingId));
+
+            newTranscriptText = fullText;
         }
 
         // Store summary/outline if available and not already pulled
@@ -116,6 +124,42 @@ async function fetchPlaudAIContent(
                 .update(recordings)
                 .set({ hasPlaudSummary: true })
                 .where(eq(recordings.id, recordingId));
+        }
+
+        // Generate AI title from Plaud transcript using user's AI provider
+        if (newTranscriptText && context.autoGenerateTitle) {
+            try {
+                const generatedTitle = await generateTitleFromTranscription(
+                    userId,
+                    newTranscriptText,
+                );
+
+                if (generatedTitle) {
+                    await db
+                        .update(recordings)
+                        .set({ filename: generatedTitle, updatedAt: new Date() })
+                        .where(eq(recordings.id, recordingId));
+
+                    if (context.syncTitleToPlaud) {
+                        try {
+                            await plaudClient.updateFilename(
+                                plaudRecording.id,
+                                generatedTitle,
+                            );
+                        } catch (error) {
+                            console.error(
+                                `Failed to sync title to Plaud for ${plaudRecording.id}:`,
+                                error,
+                            );
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(
+                    `Failed to generate title for ${plaudRecording.id}:`,
+                    error,
+                );
+            }
         }
     } catch (error) {
         console.error(
@@ -168,6 +212,7 @@ async function processRecording(
                     existingRecording.id,
                     context.userId,
                     plaudClient,
+                    context,
                     existingRecording,
                 );
             }
@@ -260,7 +305,7 @@ async function processRecording(
                 resultRecordingId,
                 context.userId,
                 plaudClient,
-                resultStatus === "updated" ? undefined : undefined,
+                context,
             );
         }
 
@@ -388,6 +433,8 @@ export async function syncRecordingsForUser(
             userId,
             autoTranscribe: settings?.autoTranscribe ?? false,
             autoTranscribeProvider: (settings?.autoTranscribeProvider as "plaud" | "user") ?? "user",
+            autoGenerateTitle: settings?.autoGenerateTitle ?? true,
+            syncTitleToPlaud: settings?.syncTitleToPlaud ?? false,
             emailNotifications: settings?.emailNotifications ?? false,
             barkNotifications: settings?.barkNotifications ?? false,
             notificationEmail:

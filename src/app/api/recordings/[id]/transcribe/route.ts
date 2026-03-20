@@ -111,12 +111,20 @@ export async function POST(
                 ? null
                 : (transcription as VerboseTranscription).language || null;
 
-        // Save transcription
+        // Save transcription (never overwrite Plaud-sourced transcriptions — they
+        // include speaker diarization and timestamps we can't reproduce)
         const [existingTranscription] = await db
             .select()
             .from(transcriptions)
             .where(eq(transcriptions.recordingId, id))
             .limit(1);
+
+        if (existingTranscription?.source === "plaud") {
+            return NextResponse.json(
+                { error: "This recording has a Plaud AI transcription. Delete it first to re-transcribe with your own provider." },
+                { status: 409 },
+            );
+        }
 
         if (existingTranscription) {
             await db
@@ -124,6 +132,7 @@ export async function POST(
                 .set({
                     text: transcriptionText,
                     detectedLanguage,
+                    source: "user",
                     transcriptionType: "server",
                     provider: credentials.provider,
                     model: credentials.defaultModel || "whisper-1",
@@ -135,6 +144,7 @@ export async function POST(
                 userId: session.user.id,
                 text: transcriptionText,
                 detectedLanguage,
+                source: "user",
                 transcriptionType: "server",
                 provider: credentials.provider,
                 model: credentials.defaultModel || "whisper-1",
