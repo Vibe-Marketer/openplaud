@@ -456,67 +456,105 @@ export function OnboardingDialog({
 
                                         {plaudAuthMode === "google" && (
                                             <>
-                                                <div className="space-y-3">
-                                                    <Button
-                                                        variant="outline"
-                                                        className="w-full"
-                                                        onClick={() => {
-                                                            window.open(
-                                                                "https://web.plaud.ai",
-                                                                "plaud-login",
-                                                                "width=500,height=700,left=200,top=100",
-                                                            );
-                                                        }}
-                                                    >
-                                                        1. Open Plaud Login
-                                                        (popup)
-                                                    </Button>
-
-                                                    <div className="bg-muted rounded-lg p-4 space-y-2 text-sm">
-                                                        <p className="font-medium">
-                                                            2. After logging in,
-                                                            copy your token:
-                                                        </p>
-                                                        <div className="flex items-center gap-2">
-                                                            <code className="flex-1 bg-background rounded px-3 py-2 text-xs font-mono select-all border">
-                                                                copy(localStorage.getItem(&apos;tokenstr&apos;))
-                                                            </code>
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => {
-                                                                    navigator.clipboard.writeText(
-                                                                        "copy(localStorage.getItem('tokenstr'))",
-                                                                    );
-                                                                    toast.success(
-                                                                        "Copied! Now paste in the Plaud popup console (F12)",
-                                                                    );
-                                                                }}
-                                                            >
-                                                                Copy
-                                                            </Button>
+                                                <div className="space-y-4">
+                                                    <div className="bg-muted rounded-lg p-4 space-y-4 text-sm">
+                                                        <div className="flex items-start gap-3">
+                                                            <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shrink-0">
+                                                                1
+                                                            </span>
+                                                            <div className="space-y-2 flex-1">
+                                                                <p className="font-medium">
+                                                                    Drag this
+                                                                    button to
+                                                                    your
+                                                                    bookmarks
+                                                                    bar:
+                                                                </p>
+                                                                {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
+                                                                <a
+                                                                    href="javascript:void(prompt('Copy this token and paste it in OpenPlaud:',localStorage.getItem('tokenstr')))"
+                                                                    onClick={(
+                                                                        e,
+                                                                    ) =>
+                                                                        e.preventDefault()
+                                                                    }
+                                                                    className="inline-block bg-primary text-primary-foreground px-4 py-2 rounded-md text-xs font-medium cursor-grab hover:opacity-90"
+                                                                    draggable
+                                                                >
+                                                                    Get Plaud
+                                                                    Token
+                                                                </a>
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    Can&apos;t
+                                                                    drag? Right-click
+                                                                    it →
+                                                                    &quot;Bookmark
+                                                                    This
+                                                                    Link&quot;
+                                                                </p>
+                                                            </div>
                                                         </div>
-                                                        <p className="text-xs text-muted-foreground">
-                                                            In the Plaud popup:
-                                                            press{" "}
-                                                            <kbd className="bg-background px-1 rounded border text-xs">
-                                                                F12
-                                                            </kbd>{" "}
-                                                            → click{" "}
-                                                            <strong>
-                                                                Console
-                                                            </strong>{" "}
-                                                            → paste the command
-                                                            above → press Enter.
-                                                            Your token is now on
-                                                            your clipboard.
-                                                        </p>
+
+                                                        <div className="flex items-start gap-3">
+                                                            <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shrink-0">
+                                                                2
+                                                            </span>
+                                                            <div className="space-y-2 flex-1">
+                                                                <p className="font-medium">
+                                                                    Open Plaud
+                                                                    and log in:
+                                                                </p>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => {
+                                                                        window.open(
+                                                                            "https://web.plaud.ai",
+                                                                            "_blank",
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    Open
+                                                                    web.plaud.ai
+                                                                </Button>
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    Log in with
+                                                                    Google,
+                                                                    Apple, or
+                                                                    email
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-start gap-3">
+                                                            <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shrink-0">
+                                                                3
+                                                            </span>
+                                                            <div className="flex-1">
+                                                                <p className="font-medium">
+                                                                    Click the
+                                                                    &quot;Get
+                                                                    Plaud
+                                                                    Token&quot;
+                                                                    bookmark
+                                                                    while on
+                                                                    web.plaud.ai
+                                                                </p>
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    A dialog
+                                                                    will show
+                                                                    your token —
+                                                                    copy it
+                                                                </p>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
 
                                                 <div className="space-y-2">
                                                     <Label htmlFor="bearer-token-google">
-                                                        3. Paste your token here
+                                                        4. Paste your token
+                                                        here
                                                     </Label>
                                                     <Input
                                                         id="bearer-token-google"
