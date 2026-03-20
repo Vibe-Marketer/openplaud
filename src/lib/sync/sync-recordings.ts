@@ -15,6 +15,7 @@ import { generateTitleFromTranscription } from "@/lib/ai/generate-title";
 import { createPlaudClient } from "@/lib/plaud/client";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
+import { fireWebhook } from "@/lib/webhooks/fire";
 import type { PlaudRecording } from "@/types/plaud";
 
 /**
@@ -49,6 +50,8 @@ interface SyncContext {
     barkNotifications: boolean;
     notificationEmail: string | null;
     barkPushUrl: string | null;
+    webhookUrl: string | null;
+    webhookSecret: string | null;
 }
 
 /**
@@ -440,6 +443,8 @@ export async function syncRecordingsForUser(
             notificationEmail:
                 settings?.notificationEmail || user?.email || null,
             barkPushUrl: settings?.barkPushUrl || null,
+            webhookUrl: settings?.webhookUrl || null,
+            webhookSecret: settings?.webhookSecret || null,
         };
 
         const plaudClient = await createPlaudClient(
@@ -588,6 +593,55 @@ export async function syncRecordingsForUser(
                     console.error("Background transcription failed:", error);
                 },
             );
+        }
+
+        // Fire webhook if configured and there are new recordings
+        if (context.webhookUrl && result.newRecordings > 0) {
+            try {
+                // Fetch details for new recordings
+                const newRecordingDetails = await Promise.all(
+                    result.pendingTranscriptionIds.map(async (id) => {
+                        const [rec] = await db
+                            .select({
+                                id: recordings.id,
+                                filename: recordings.filename,
+                                duration: recordings.duration,
+                                startTime: recordings.startTime,
+                                plaudFileId: recordings.plaudFileId,
+                            })
+                            .from(recordings)
+                            .where(eq(recordings.id, id))
+                            .limit(1);
+                        return rec;
+                    }),
+                );
+
+                const validRecordings = newRecordingDetails.filter(Boolean);
+
+                fireWebhook(
+                    context.webhookUrl,
+                    {
+                        event: "recordings.synced",
+                        timestamp: new Date().toISOString(),
+                        data: {
+                            newRecordings: validRecordings.map((r) => ({
+                                id: r.id,
+                                filename: r.filename,
+                                duration: r.duration,
+                                startTime: r.startTime.toISOString(),
+                                plaudFileId: r.plaudFileId,
+                            })),
+                            totalNew: result.newRecordings,
+                            totalUpdated: result.updatedRecordings,
+                        },
+                    },
+                    context.webhookSecret,
+                ).catch((error) => {
+                    console.error("Webhook delivery failed:", error);
+                });
+            } catch (error) {
+                console.error("Failed to prepare webhook payload:", error);
+            }
         }
 
         return result;

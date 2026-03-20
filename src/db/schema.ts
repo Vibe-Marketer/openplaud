@@ -334,6 +334,9 @@ export const userSettings = pgTable("user_settings", {
     syncTitleToPlaud: boolean("sync_title_to_plaud").notNull().default(false),
     // Title generation prompt configuration
     titleGenerationPrompt: jsonb("title_generation_prompt"), // { preset: string, customPrompt?: string }
+    // Webhook URL — called when new recordings are synced (POST with recording data)
+    webhookUrl: text("webhook_url"),
+    webhookSecret: text("webhook_secret"), // optional shared secret for HMAC signing
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

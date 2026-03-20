@@ -32,6 +32,9 @@ const envSchema = z.object({
         .transform((val) => val === "true"),
     SMTP_USER: z.string().optional(),
     SMTP_PASSWORD: z.string().optional(),
+    // Server-side cron sync secret (used by /api/cron/sync)
+    CRON_SECRET: z.string().optional(),
+
     SMTP_FROM: z
         .string()
         .optional()
@@ -72,6 +75,7 @@ function validateEnv(): Env {
             S3_REGION: process.env.S3_REGION,
             S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID,
             S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY,
+            CRON_SECRET: process.env.CRON_SECRET,
             SMTP_HOST: process.env.SMTP_HOST,
             SMTP_PORT: process.env.SMTP_PORT,
             SMTP_SECURE: process.env.SMTP_SECURE,

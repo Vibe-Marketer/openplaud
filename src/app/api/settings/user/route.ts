@@ -36,6 +36,8 @@ const DEFAULT_SETTINGS = {
     onboardingCompleted: false,
     autoGenerateTitle: true,
     syncTitleToPlaud: false,
+    webhookUrl: null,
+    webhookSecret: null,
 } as const;
 
 // Settings field names (excluding userId, id, createdAt, updatedAt)
@@ -70,6 +72,8 @@ const SETTINGS_FIELDS = [
     "onboardingCompleted",
     "autoGenerateTitle",
     "syncTitleToPlaud",
+    "webhookUrl",
+    "webhookSecret",
 ] as const;
 
 // Extract settings from database row to response format
