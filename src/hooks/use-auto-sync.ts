@@ -130,9 +130,9 @@ export function useAutoSync(options: UseAutoSyncOptions = {}) {
                         },
                     }));
 
-                    if (!silent || result.newRecordings > 0) {
-                        router.refresh();
-                    }
+                    // Always refresh — transcripts may have been pulled for
+                    // existing recordings even when newRecordings is 0
+                    router.refresh();
 
                     if (result.newRecordings > 0) {
                         onSuccessRef.current?.(result.newRecordings);

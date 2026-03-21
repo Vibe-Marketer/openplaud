@@ -27,6 +27,7 @@ export async function POST(request: Request) {
             success: true,
             newRecordings: result.newRecordings,
             updatedRecordings: result.updatedRecordings,
+            triggeredTranscriptions: result.triggeredTranscriptions,
             errors: result.errors,
         });
     } catch (error) {
