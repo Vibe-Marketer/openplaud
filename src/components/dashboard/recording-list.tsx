@@ -1,7 +1,8 @@
 "use client";
 
-import { Clock, HardDrive, Play } from "lucide-react";
+import { Check, Clock, Download, HardDrive, Play } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDateTime } from "@/lib/format-date";
 import { cn } from "@/lib/utils";
@@ -12,12 +13,14 @@ interface RecordingListProps {
     recordings: Recording[];
     currentRecording: Recording | null;
     onSelect: (recording: Recording) => void;
+    onExportSelected?: (ids: string[]) => void;
 }
 
 export function RecordingList({
     recordings,
     currentRecording,
     onSelect,
+    onExportSelected,
 }: RecordingListProps) {
     const [dateTimeFormat, setDateTimeFormat] =
         useState<DateTimeFormat>("relative");
@@ -26,6 +29,31 @@ export function RecordingList({
     );
     const [itemsPerPage, setItemsPerPage] = useState(50);
     const [currentPage, setCurrentPage] = useState(1);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [selectMode, setSelectMode] = useState(false);
+
+    const toggleSelect = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+            return next;
+        });
+    };
+
+    const selectAll = () => {
+        setSelectedIds(
+            new Set(sortedAndPaginatedRecordings.map((r) => r.id)),
+        );
+    };
+
+    const selectNone = () => {
+        setSelectedIds(new Set());
+    };
 
     useEffect(() => {
         fetch("/api/settings/user")
@@ -78,21 +106,95 @@ export function RecordingList({
     return (
         <Card hasNoPadding>
             <CardContent className="p-0">
+                {/* Select mode toolbar */}
+                <div className="flex items-center justify-between px-4 py-2 border-b">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setSelectMode(!selectMode);
+                            if (selectMode) selectNone();
+                        }}
+                        className={cn(
+                            "text-xs font-medium px-2 py-1 rounded transition-colors",
+                            selectMode
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:text-foreground",
+                        )}
+                    >
+                        {selectMode ? "Cancel" : "Select"}
+                    </button>
+                    {selectMode && (
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={
+                                    selectedIds.size ===
+                                    sortedAndPaginatedRecordings.length
+                                        ? selectNone
+                                        : selectAll
+                                }
+                                className="text-xs text-muted-foreground hover:text-foreground"
+                            >
+                                {selectedIds.size ===
+                                sortedAndPaginatedRecordings.length
+                                    ? "Deselect All"
+                                    : "Select All"}
+                            </button>
+                            {selectedIds.size > 0 && onExportSelected && (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs gap-1"
+                                    onClick={() =>
+                                        onExportSelected(
+                                            Array.from(selectedIds),
+                                        )
+                                    }
+                                >
+                                    <Download className="w-3 h-3" />
+                                    Export {selectedIds.size} as .md
+                                </Button>
+                            )}
+                        </div>
+                    )}
+                </div>
                 <div className="divide-y">
                     {sortedAndPaginatedRecordings.map((recording) => {
-                        const isSelected =
+                        const isCurrent =
                             currentRecording?.id === recording.id;
+                        const isChecked = selectedIds.has(recording.id);
                         return (
                             <button
                                 key={recording.id}
                                 type="button"
-                                onClick={() => onSelect(recording)}
+                                onClick={(e) => {
+                                    if (selectMode) {
+                                        toggleSelect(recording.id, e);
+                                    } else {
+                                        onSelect(recording);
+                                    }
+                                }}
                                 className={cn(
                                     "w-full text-left p-4 hover:bg-accent transition-colors",
-                                    isSelected && "bg-accent",
+                                    isCurrent && !selectMode && "bg-accent",
+                                    isChecked && selectMode && "bg-primary/10",
                                 )}
                             >
-                                <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-start gap-3">
+                                    {selectMode && (
+                                        <div
+                                            className={cn(
+                                                "w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors",
+                                                isChecked
+                                                    ? "bg-primary border-primary"
+                                                    : "border-muted-foreground/30",
+                                            )}
+                                        >
+                                            {isChecked && (
+                                                <Check className="w-3 h-3 text-primary-foreground" />
+                                            )}
+                                        </div>
+                                    )}
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
                                             <Play className="w-4 h-4 text-muted-foreground flex-shrink-0" />

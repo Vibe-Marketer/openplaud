@@ -273,6 +273,61 @@ export function Workstation({ recordings, transcriptions }: WorkstationProps) {
                                     recordings={recordings}
                                     currentRecording={currentRecording}
                                     onSelect={setCurrentRecording}
+                                    onExportSelected={(ids) => {
+                                        const parts: string[] = [];
+                                        for (const id of ids) {
+                                            const rec = recordings.find(
+                                                (r) => r.id === id,
+                                            );
+                                            const t = transcriptions.get(id);
+                                            if (!rec) continue;
+                                            const date = new Date(
+                                                rec.startTime,
+                                            ).toISOString().split("T")[0];
+                                            const duration = `${Math.floor(rec.duration / 60000)}:${String(Math.floor((rec.duration % 60000) / 1000)).padStart(2, "0")}`;
+                                            let md = `---\ntitle: "${rec.filename.replace(/"/g, '\\"')}"\ndate: ${date}\nduration: "${duration}"\n---\n\n# ${rec.filename}\n\n`;
+                                            if (t?.text) {
+                                                md += t.text;
+                                            } else {
+                                                md += "*No transcription available*";
+                                            }
+                                            parts.push(md);
+                                        }
+
+                                        if (ids.length === 1) {
+                                            const rec = recordings.find(
+                                                (r) => r.id === ids[0],
+                                            );
+                                            const filename = (rec?.filename || "transcript")
+                                                .replace(/[^a-zA-Z0-9-_ ]/g, "")
+                                                .replace(/\s+/g, "-")
+                                                .substring(0, 80);
+                                            const blob = new Blob(
+                                                [parts[0]],
+                                                { type: "text/markdown" },
+                                            );
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement("a");
+                                            a.href = url;
+                                            a.download = `${filename}.md`;
+                                            a.click();
+                                            URL.revokeObjectURL(url);
+                                        } else {
+                                            const combined = parts.join(
+                                                "\n\n---\n\n",
+                                            );
+                                            const blob = new Blob(
+                                                [combined],
+                                                { type: "text/markdown" },
+                                            );
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement("a");
+                                            a.href = url;
+                                            a.download = `transcripts-${ids.length}.md`;
+                                            a.click();
+                                            URL.revokeObjectURL(url);
+                                        }
+                                    }}
                                 />
                             </div>
 
